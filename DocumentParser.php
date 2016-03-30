@@ -52,7 +52,7 @@ class DocumentParser {
     }
 
     /**
-     * Parse zipped document, i.e. .docx or .odt (http://goo.gl/usI7PF)
+     * Parse zipped document, i.e. .docx or .odt (adapted from http://goo.gl/usI7PF)
      * @param string $filename The path to the document
      * @param string $datafile .odt and .docx documents are just zipped folders with an XML file. This variable is the path to the main
      *  xml file which holds the text for the document
@@ -79,13 +79,12 @@ class DocumentParser {
     }
 
     /**
-     * Parse a .doc file (http://goo.gl/Wm29Aj)
+     * Parse a .doc file (adapted from http://goo.gl/Wm29Aj)
      * @param string $filename The path to the word document
      * @return string The parsed document
      */
     private static function parseDoc($filename) {
-        echo file_get_contents($filename);exit;
-        $contents = mb_convert_encoding(file_get_contents($filename), 'utf8');
+        $contents = mb_convert_encoding(file_get_contents($filename), 'utf8', 'binary');
         $lines = mb_split("\r", $contents);
         $outtext = "";
         foreach ($lines as $thisline) {
@@ -94,11 +93,11 @@ class DocumentParser {
                 $outtext .= "{$thisline}\n\n";
             }
         }
-        return preg_replace("/[^a-zA-Z0-9\s\,\.\-\n\r\t@\/\_\(\)]/", "", $outtext);
+        return $outtext;
     }
 
     /**
-     * Determine whether a line in a .rtf string is plain text (http://goo.gl/yVojUP)
+     * Determine whether a line in a .rtf string is plain text (adapted from http://goo.gl/yVojUP)
      * @param string $string The string to parse
      * @return boolean True if the rtf string is plain text
      */
@@ -113,7 +112,7 @@ class DocumentParser {
     }
 
     /**
-     * Parse a .rtf file (http://goo.gl/yVojUP).
+     * Parse a .rtf file (adapted from http://goo.gl/yVojUP).
      * @todo Parse properly. Returning a peculiar result.
      * @param string $filename The path to the .rtf file
      * @return string The plain text .rtf contents

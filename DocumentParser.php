@@ -6,8 +6,8 @@ class DocumentParser {
 
     /**
      * Parse a document from the contents of the string
-     * @param type $string
-     * @param type $mimetype
+     * @param mixed $string The contents of the file to process
+     * @param string $mimetype [optional] The mimetype of the file. Defaults to text/plain
      * @return type
      * @throws Exception
      */
@@ -15,10 +15,10 @@ class DocumentParser {
         if (preg_match("/^text\/*/", $mimetype)) {
             return $string;
         }
-        $tmpfilename = 'temp/' . time() . sha1($string) . 'tmp';
-        file_put_contents($tmpfilename, $string);
+        $tmpfilename = 'temp/' . time() . sha1($string) . '.tmp';
+        cLib::filePutContents($tmpfilename, $string);
         $contents = self::parseFromFile($tmpfilename, $mimetype);
-        unlink($tmpfilename);
+        cLib::unlink($tmpfilename);
         return $contents;
     }
     
@@ -26,12 +26,12 @@ class DocumentParser {
      * Parse the a document and get the text
      * @param string $filename The name of the file to read
      * @param string $mimetype The mimetype of the file. Used to decide which algorithm to use
-     * @return string The parsed document
+     * @return string|html The extracted document. For DOC(X) and ODT documents, the content is returned in a HTML format
      * @throws Exception
      */
     static function parseFromFile($filename, $mimetype = null) {
         if (!is_readable($filename)) {
-            throw new Exception("Cannot read file {$filename}");
+            throw new Exception(sprintf('Failed to read file: cannot read file %s', $filename));
         }
         if (!$mimetype) {
             $mimetype = mime_content_type($filename);
@@ -47,7 +47,7 @@ class DocumentParser {
         } else if ($mimetype === 'application/vnd.oasis.opendocument.text') {
             return self::parseZipped($filename, 'content.xml');
         } else {
-            throw new Exception("Unknown mimetype {$mimetype}");
+            throw new Exception(sprintf('Failed to read file: unknown mimetype %s', $mimetype));
         }
     }
 
@@ -56,7 +56,7 @@ class DocumentParser {
      * @param string $filename The path to the document
      * @param string $datafile .odt and .docx documents are just zipped folders with an XML file. This variable is the path to the main
      *  xml file which holds the text for the document
-     * @return string
+     * @return html
      * @throws Exception
      */
     private static function parseZipped($filename, $datafile) {
@@ -68,20 +68,137 @@ class DocumentParser {
             if (($index = $zip->locateName($datafile)) !== false) {
                 // If the data file can be found, read it to the string
                 $data = $zip->getFromIndex($index);
-                $xmldom = DOMDocument::loadXML($data, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
-                $content = $xmldom->saveXML();
+                $xmldoc = new DOMDocument();
+                $xmldoc->loadXML($data, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
+                if ($datafile === 'word/document.xml') {
+                    // Perform docx specific processing
+                    self::convertWordToHtml($xmldoc);
+                } else {
+                    self::convertOdtToHtml($xmldoc);
+                }
+                $content = $xmldoc->saveXML();
             }
             $zip->close();
         } else {
-            throw new Exception('Could not read document');
+            throw new Exception(sprintf('Failed to read file'));
         }
-        return strip_tags(str_replace(['</w:r></w:p></w:tc><w:tc>', '</w:r></w:p>'], [' ', "\r\n"], $content));
+        return strip_tags($content, '<p><em><strong>');
+    }
+    
+    /**
+     * Convert a DOCX XMLDocument to html
+     * @param DOMDocument $xmldoc The xml document describing the word file
+     */
+    private static function convertWordToHtml(DOMDocument $xmldoc) {
+        // To make processing easier, remove the 'w' namespace from all elements
+        self::removeDomNamespace($xmldoc, 'w');
+        $xpath = new DOMXPath($xmldoc);
+        // Get all 'r' elements
+        foreach ($xpath->query("//r") as $node) {
+            /*@var $node DOMElement*/
+            /*@var $stylenodes DOMNodeList*/
+            /*@var $textnode DOMNodeList*/
+            // The rPr tag defines style elements 
+            $stylenodes = $node->getElementsByTagName('rPr');
+            $textnode = $node->getElementsByTagName('t')->item(0);
+            if ($stylenodes && $stylenodes->length) {
+                $stylenode = $stylenodes->item(0);
+                $itags = $stylenode->getElementsByTagName('i');
+                $btags = $stylenode->getElementsByTagName('b');
+                if ($itags->length) {
+                    self::renameTag($textnode, 'em');
+                } else if ($btags->length) {
+                    self::renameTag($textnode, 'strong');
+                }
+                $toremove = array_merge(iterator_to_array($itags), iterator_to_array($btags));
+                foreach ($toremove as $nodetoremove) {
+                    $nodetoremove->parentNode->removeChild($nodetoremove);
+                }
+            }
+        }
+        self::removeEmptyTag($xmldoc, 'p');
+    }
+    
+    /**
+     * Convert an ODT XMLDocument to html
+     * @param DOMDocument $xmldoc The XML document to manipulate
+     */
+    private static function convertOdtToHtml(DOMDocument $xmldoc) {
+        self::removeDomNamespace($xmldoc, 'office');
+        self::removeDomNamespace($xmldoc, 'style');
+        self::removeDomNamespace($xmldoc, 'text');
+        $xpath = new DOMXPath($xmldoc);
+        // Cannot select using XPath attributes for some reason, cannot seem to access 'style-name' attr
+        $spans = $xpath->query("//body/text/p/span");
+        foreach ($spans as $span) {
+            /*@var $span DOMElement*/
+            if (!$span->attributes->length) {
+                continue;
+            }
+            $attributes = iterator_to_array($span->attributes);
+            if (isset($attributes['style-name'])) {
+                /*@var $attr DOMAttr*/
+                $attr = $attributes['style-name'];
+                if ($attr->value === 'T3') {
+                    self::renameTag($span, 'em');
+                } else if ($attr->value === 'T4') {
+                    self::renameTag($span, 'strong');
+                }
+            }
+        }
+        self::removeEmptyTag($xmldoc, 'p');
+    }
+    
+    /**
+     * Remove empty tags from a document
+     * @param DOMDocument $xmldoc The document to look in
+     * @param string $tagname The name of the tag to test for emptiness
+     */
+    private static function removeEmptyTag(DOMDocument $xmldoc, $tagname) {
+        $xpath = new DOMXPath($xmldoc);
+        foreach ($xpath->query("//$tagname") as $node) {
+            /*@var $node DOMElement*/
+            if ($node->textContent === '') {
+                // Remove empty p tags
+                $node->parentNode->removeChild($node);
+            }
+        }
+    }
+    
+    /**
+     * Remove the namespace from an XML document (adapted from http://goo.gl/RBlUPU)
+     * @param DOMDocument $xmldoc The document to process
+     * @param string $namespace The namespace to remove
+     */
+    private static function removeDomNamespace(DOMDocument $xmldoc, $namespace) {
+        $xpath = new DOMXPath($xmldoc);
+        $nodes = $xpath->query("//*[namespace::{$namespace} and not(../namespace::{$namespace})]");
+        foreach ($nodes as $n) {
+            $namespaceuri = $n->lookupNamespaceURI($namespace);
+            $n->removeAttributeNS($namespaceuri, $namespace);
+        }
+    }
+    
+    /**
+     * Rename a DOMElement (i.e. rename a tag, e.g. i -> em). (adapted from http://goo.gl/Crll0b)
+     * @param DOMElement $tag The tag to rename
+     * @param string $newtagname The name of the new tag
+     * @return DOMElement
+     */
+    private static function renameTag(DOMElement $tag, $newtagname) {
+        $document = $tag->ownerDocument;
+        $newtag = $document->createElement($newtagname);
+        $tag->parentNode->replaceChild($newtag, $tag);
+        foreach (iterator_to_array($tag->childNodes) as $child) {
+            $newtag->appendChild($tag->removeChild($child));
+        }
+        return $newtag;
     }
 
     /**
      * Parse a .doc file (adapted from http://goo.gl/Wm29Aj)
      * @param string $filename The path to the word document
-     * @return string The parsed document
+     * @return html
      */
     private static function parseDoc($filename) {
         $contents = mb_convert_encoding(file_get_contents($filename), 'utf8', 'binary');
@@ -90,7 +207,7 @@ class DocumentParser {
         foreach ($lines as $thisline) {
             // 0x00 is the null value
             if (strpos($thisline, chr(0x00)) === false && strlen($thisline) !== 0) {
-                $outtext .= "{$thisline}\n\n";
+                $outtext .= "<p>{$thisline}</p>";
             }
         }
         return $outtext;

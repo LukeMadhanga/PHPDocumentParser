@@ -16,9 +16,9 @@ class DocumentParser {
             return $string;
         }
         $tmpfilename = 'temp/' . time() . sha1($string) . '.tmp';
-        cLib::filePutContents($tmpfilename, $string);
+        file_put_contents($tmpfilename, $string);
         $contents = self::parseFromFile($tmpfilename, $mimetype);
-        cLib::unlink($tmpfilename);
+        unlink($tmpfilename);
         return $contents;
     }
     

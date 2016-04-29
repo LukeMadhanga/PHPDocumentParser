@@ -44,4 +44,4 @@ string `$mimetype` The mimetype of the file. This will be used to determine whic
 #### April 29th 2016
 **Improved .doc process**
 
-The script to parse .doc files is unreliable: it breaks on complicated documents. I would suggest installing the antiiword command line utility as that works almost perfectly for the larger majority of documents. 
+The script to parse .doc files is unreliable: it breaks on complicated documents. I would suggest installing the `antiword` command line utility as that works almost perfectly for the larger majority of documents. 

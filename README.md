@@ -36,3 +36,12 @@ string  `$string` The contents of the file to parse
 string `$mimetype` The mimetype of the file. This will be used to determine which algorithm to use when decoding
 
 **returns** string The text in the document
+
+---
+
+## Change log
+
+#### April 29th 2016
+**Improved .doc process**
+
+The script to parse .doc files is unreliable: it breaks on complicated documents. I would suggest installing the antiiword command line utility as that works almost perfectly for the larger majority of documents. 

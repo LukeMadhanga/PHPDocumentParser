@@ -253,6 +253,7 @@ class DocumentParser {
      */
     private static function parseDocAntiword($contents) {
         $xml = new DOMDocument;
+        $xml->preserveWhiteSpace = false;
         $xml->loadXML($contents);
         self::removeNodesByTagname($xml, 'title,bookinfo');
         $xpath = new DOMXPath($xml);
@@ -273,7 +274,8 @@ class DocumentParser {
             self::renameTag($node, $newtagname);
         }
         self::removeEmptyTag($xml, 'p');
-        return trim(strip_tags($xml->saveXML(), '<p><em><strong>'));
+        // White space management. Required if output is being in JS Code editors like tinyMCE
+        return str_replace("\n", '', trim(strip_tags($xml->saveXML(), '<p><em><b>')));
     }
 
     /**

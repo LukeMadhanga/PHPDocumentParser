@@ -31,7 +31,7 @@ class DocumentParser {
      */
     static function parseFromFile($filename, $mimetype = null) {
         if (!is_readable($filename)) {
-            throw new Exception(sprintf('Failed to read file: cannot read file %s', $filename));
+            throw new Exception(tx('Failed to read file: cannot read file %s', $filename));
         }
         if (!$mimetype) {
             $mimetype = mime_content_type($filename);
@@ -47,7 +47,7 @@ class DocumentParser {
         } else if ($mimetype === 'application/vnd.oasis.opendocument.text') {
             return self::parseZipped($filename, 'content.xml');
         } else {
-            throw new Exception(sprintf('Failed to read file: unknown mimetype %s', $mimetype));
+            throw new Exception(tx('Failed to read file: unknown mimetype %s', $mimetype));
         }
     }
 
@@ -80,7 +80,7 @@ class DocumentParser {
             }
             $zip->close();
         } else {
-            throw new Exception(sprintf('Failed to read file'));
+            throw new Exception(tx('Failed to read file'));
         }
         return strip_tags($content, '<p><em><strong>');
     }
@@ -158,8 +158,8 @@ class DocumentParser {
         $xpath = new DOMXPath($xmldoc);
         foreach ($xpath->query("//$tagname") as $node) {
             /*@var $node DOMElement*/
-            if ($node->textContent === '') {
-                // Remove empty p tags
+            if (trim($node->textContent) === '') {
+                // Remove empty tags
                 $node->parentNode->removeChild($node);
             }
         }
@@ -194,6 +194,29 @@ class DocumentParser {
         }
         return $newtag;
     }
+    
+    /**
+     * Remove nodes from a given document by their tag names
+     * @param DOMDocument $xml The XML document from which to remove nodes
+     * @param string|array $tagnames A comma separated list of tagnames to remove
+     */
+    private static function removeNodesByTagname(DOMDocument $xml, $tagnames) {
+        if (!is_array($tagnames)) {
+            $tagnames = explode(',', $tagnames);
+        }
+        $xpath = new DOMXPath($xml);
+        foreach ($tagnames as $tagname) {
+            $nodes = $xpath->query("//{$tagname}");
+            foreach ($nodes as $node) {
+                /*@var $node DOMNode*/
+                /*@var $parentnode DOMNode*/
+                $parentnode = $node->parentNode;
+                if ($parentnode) {
+                    $parentnode->removeChild($node);
+                }
+            }
+        }
+    }
 
     /**
      * Parse a .doc file (adapted from http://goo.gl/Wm29Aj)
@@ -201,16 +224,56 @@ class DocumentParser {
      * @return html
      */
     private static function parseDoc($filename) {
-        $contents = mb_convert_encoding(file_get_contents($filename), 'utf8', 'binary');
-        $lines = mb_split("\r", $contents);
-        $outtext = "";
-        foreach ($lines as $thisline) {
-            // 0x00 is the null value
-            if (strpos($thisline, chr(0x00)) === false && strlen($thisline) !== 0) {
-                $outtext .= "<p>{$thisline}</p>";
+        // Start off by attempting to see if the command line programme antiword is available. If so, process the document in XML 
+        //  docbook (db) format. This is to preserve paragraph formatting
+        $contents = shell_exec('antiword -x db ' . escapeshellarg($filename));
+        if ($contents) {
+            $outtext = self::parseDocAntiword($contents);
+        } else {
+            // Fallback to a version that is somewhat buggy. Works for most .doc documents, but the tests are nowhere near good enough.
+            //  Contrast this script which is a couple of lines to the sourcecode of Antiword, which is several thousand
+            $contents = mb_convert_encoding(file_get_contents($filename), 'utf8', 'binary');
+            $paragraphs = mb_split("\r", $contents);
+            $outtext = "";
+            foreach ($paragraphs as $thisparagraph) {
+                // 0x00 is the null value. Note, this test is buggy. If a paragraph has, for whatever reason, a null character, this 
+                //  paragraph will be missing
+                if (strpos($thisparagraph, chr(0x00)) === false && strlen($thisparagraph) !== 0) {
+                    $outtext .= "<p>{$thisparagraph}</p>";
+                }
             }
         }
         return $outtext;
+    }
+    
+    /**
+     * Parse the result of an antiword .doc parse
+     * @param string $contents The contents of the word document
+     * @return html Simplified HTML with just p, em and strong tags
+     */
+    private static function parseDocAntiword($contents) {
+        $xml = new DOMDocument;
+        $xml->loadXML($contents);
+        self::removeNodesByTagname($xml, 'title,bookinfo');
+        $xpath = new DOMXPath($xml);
+        // Find all of the 'para' nodes
+        $paranodes = $xpath->query('//para');
+        foreach ($paranodes as $node) {
+            /*@var $node \DOMElement*/
+            self::renameTag($node, 'p');
+        }
+        // Find all of the 'emphasis' nodes
+        $emnodes = $xpath->query('//emphasis');
+        foreach ($emnodes as $node) {
+            /*@var $node \DOMElement*/
+            $newtagname = 'em';
+            if ($node->getAttribute('role') === 'bold') {
+                $newtagname = 'strong';
+            }
+            self::renameTag($node, $newtagname);
+        }
+        self::removeEmptyTag($xml, 'p');
+        return trim(strip_tags($xml->saveXML(), '<p><em><strong>'));
     }
 
     /**

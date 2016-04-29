@@ -224,11 +224,11 @@ class DocumentParser {
      * @return html
      */
     private static function parseDoc($filename) {
-        // Start off by attempting to see if the command line programme antiword is available. If so, process the document in XML 
-        //  docbook (db) format. This is to preserve paragraph formatting
-        $contents = shell_exec('antiword -x db ' . escapeshellarg($filename));
-        if ($contents) {
-            $outtext = self::parseDocAntiword($contents);
+        if (shell_exec('which antiword')) {
+            // The antiword programme is installed
+            // Start off by attempting to see if the command line programme antiword is available. If so, process the document in XML 
+            //  docbook (db) format. This is to preserve paragraph formatting
+            $outtext = self::parseDocAntiword(shell_exec('antiword -x db ' . escapeshellarg($filename)));
         } else {
             // Fallback to a version that is somewhat buggy. Works for most .doc documents, but the tests are nowhere near good enough.
             //  Contrast this script which is a couple of lines to the sourcecode of Antiword, which is several thousand

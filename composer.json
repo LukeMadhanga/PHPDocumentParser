@@ -1,5 +1,5 @@
 {
-    "name": "LukeMadhanga/PHPDocumentParser",
+    "name": "lukemadhanga/PHPDocumentParser",
     "description": "A PHP parser for getting the text from a .doc, .docx, .rtf or .txt file",
     "require": {
         "php": ">=5.3.3"

@@ -7,6 +7,7 @@
 
 This library is perfect if you want users to be able to upload word documents to your content management system, instead of forcing them to copy and paste. Supported file types are **.doc**, **.docx**, **.txt** and **.rtf**.
 
+> composer require lukemadhanga/php-document-parser
 
 ----------
 
@@ -40,6 +41,11 @@ string `$mimetype` The mimetype of the file. This will be used to determine whic
 ---
 
 ## Change log
+
+#### September 13th 2017
+**Added composer**
+
+> composer require lukemadhanga/php-document-parser
 
 #### April 29th 2016
 **Improved .doc process**

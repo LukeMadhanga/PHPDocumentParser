@@ -31,7 +31,7 @@ class DocumentParser {
      */
     static function parseFromFile($filename, $mimetype = null) {
         if (!is_readable($filename)) {
-            throw new Exception(tx('Failed to read file: cannot read file %s', $filename));
+            throw new \Exception("Failed to read file: cannot read file {$filename}");
         }
         if (!$mimetype) {
             $mimetype = mime_content_type($filename);
@@ -47,7 +47,7 @@ class DocumentParser {
         } else if ($mimetype === 'application/vnd.oasis.opendocument.text') {
             return self::parseZipped($filename, 'content.xml');
         } else {
-            throw new Exception(tx('Failed to read file: unknown mimetype %s', $mimetype));
+            throw new \Exception("Failed to read file: unknown mimetype {$mimetype}");
         }
     }
 
@@ -80,7 +80,7 @@ class DocumentParser {
             }
             $zip->close();
         } else {
-            throw new Exception(tx('Failed to read file'));
+            throw new \Exception('Failed to read file');
         }
         return strip_tags($content, '<p><em><strong>');
     }

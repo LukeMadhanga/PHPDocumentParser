@@ -9,6 +9,12 @@ This library is perfect if you want users to be able to upload word documents to
 
 > composer require lukemadhanga/php-document-parser
 
+May require you to install PHP Zip
+
+> sudo apt-get install php7.0-zip
+
+The above `Ubuntu` command will vary depending on your version of PHP and what OS is running on your server
+
 ----------
 
 

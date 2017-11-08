@@ -11,5 +11,10 @@
             "homepage": "http://madhan.ga",
             "role": "Developer"
         }
-    ]
+    ],
+    "autoload": {
+        "psr-4": {
+            "LukeMadhanga\\": "src/"
+        }
+    }
 }

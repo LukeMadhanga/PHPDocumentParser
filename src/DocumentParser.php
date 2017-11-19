@@ -101,7 +101,7 @@ class DocumentParser {
             // The rPr tag defines style elements 
             $stylenodes = $node->getElementsByTagName('rPr');
             $textnode = $node->getElementsByTagName('t')->item(0);
-            if ($stylenodes && $stylenodes->length) {
+            if ($stylenodes && $textnode && $stylenodes->length) {
                 $stylenode = $stylenodes->item(0);
                 $itags = $stylenode->getElementsByTagName('i');
                 $btags = $stylenode->getElementsByTagName('b');

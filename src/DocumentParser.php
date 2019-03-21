@@ -46,8 +46,10 @@ class DocumentParser {
             return self::parseZipped($filename, 'word/document.xml');
         } else if ($mimetype === 'application/vnd.oasis.opendocument.text') {
             return self::parseZipped($filename, 'content.xml');
+        } else if ($mimetype === 'application/octet-stream') {
+            return self::parseZipped($filename, 'word/document.xml');
         } else {
-            throw new \Exception('Failed to read file: unknown mimetype %s', $mimetype);
+            throw new \Exception("Failed to read file: unknown mimetype: $mimetype");
         }
     }
 
@@ -80,11 +82,11 @@ class DocumentParser {
             }
             $zip->close();
         } else {
-            throw new \Exception('Failed to read file');
+           throw new Exception("Failed to read file", 1);
         }
         return strip_tags($content, '<p><em><strong>');
     }
-    
+
     /**
      * Convert a DOCX XMLDocument to html
      * @param \DOMDocument $xmldoc The xml document describing the word file

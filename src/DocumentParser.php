@@ -82,7 +82,7 @@ class DocumentParser {
             }
             $zip->close();
         } else {
-           throw new Exception("Failed to read file", 1);
+           throw new \Exception("Failed to read file", 1);
         }
         return strip_tags($content, '<p><em><strong>');
     }

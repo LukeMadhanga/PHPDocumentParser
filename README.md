@@ -48,6 +48,11 @@ string `$mimetype` The mimetype of the file. This will be used to determine whic
 
 ## Change log
 
+#### March 21 2019 (0.1.2)
+**DOCX Handling**
+Merged in #10 For better DOCX handling. Includes bug fixes for exception handling
+
+
 #### September 13th 2017
 **Added composer**
 

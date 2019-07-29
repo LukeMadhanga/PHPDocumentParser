@@ -4,6 +4,9 @@
     "require": {
         "php": ">=5.3.3"
     },
+    "require-dev": {
+        "phpunit/phpunit": "^8.2"
+    },
     "authors": [
         {
             "name": "Luke Madhanga",

@@ -48,9 +48,13 @@ string `$mimetype` The mimetype of the file. This will be used to determine whic
 
 ## Change log
 
+#### August 1 2019 (0.1.3)
+**PHP Unit**
+Merged in #12 for PHP Unit testing. Author: facuonline
+
 #### March 21 2019 (0.1.2)
 **DOCX Handling**
-Merged in #10 For better DOCX handling. Includes bug fixes for exception handling
+Merged in #10 For better DOCX handling. Includes bug fixes for exception handling. Author: facuonline
 
 
 #### September 13th 2017

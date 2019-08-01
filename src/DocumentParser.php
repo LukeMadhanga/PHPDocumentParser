@@ -31,7 +31,7 @@ class DocumentParser {
      */
     static function parseFromFile($filename, $mimetype = null) {
         if (!is_readable($filename)) {
-            throw new \Exception('Failed to read file: cannot read file %s', $filename);
+            throw new \Exception("Failed to read file: cannot read file: $filename");
         }
         if (!$mimetype) {
             $mimetype = mime_content_type($filename);

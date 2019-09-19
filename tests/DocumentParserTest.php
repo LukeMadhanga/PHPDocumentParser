@@ -26,7 +26,8 @@ class testDocumentParser extends \PHPUnit\Framework\TestCase {
         $html = \LukeMadhanga\DocumentParser::parseFromFile('tests/testFile.html');
 
         $this->assertIsString($html);
-        $this->assertEquals('<!DOCTYPE html>', $html);
+        $this->assertEquals('<h1>header</h1>
+    <p>Test html for lukemadhanga/php-document-parser.</p>', $html);
     }
 
     /**

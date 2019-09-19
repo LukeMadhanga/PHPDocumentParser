@@ -53,7 +53,7 @@ class DocumentParser {
         
         if (preg_match("/^text\/*/", $mimetype)) {
             if ($mimetype === 'text/html') {
-                return strip_tags(file_get_contents($filename), self::$allowed_tags);
+                return self::parseHtml($filename);
             } else {
                 return file_get_contents($filename);
             }
@@ -259,6 +259,18 @@ class DocumentParser {
                 }
             }
         }
+    }
+
+    /**
+     * Parse an .html file
+     * @param string $filename The path to the html file
+     * @return html Without non markup supported tags
+     */
+    public static function parseHtml($filename) {
+        $content = file_get_contents($filename);
+
+        $content = strip_tags($content, self::$allowed_tags);
+        return trim($content);
     }
 
     /**

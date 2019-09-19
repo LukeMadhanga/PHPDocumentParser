@@ -38,6 +38,7 @@ class testDocumentParser extends \PHPUnit\Framework\TestCase {
 
         $this->assertIsString($rtf);
         $this->assertStringMatchesFormat('%a', $rtf);
+        $this->assertEquals('Test string for lukemadhanga/php-document-parser.', $rtf);
     }
 
 }

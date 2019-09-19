@@ -543,7 +543,7 @@ class DocumentParser {
         }
         
         // Return result.
-        return $document;
+        return trim($document);
     }
 
 }

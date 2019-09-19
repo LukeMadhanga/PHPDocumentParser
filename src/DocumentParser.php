@@ -10,6 +10,11 @@ namespace LukeMadhanga;
 class DocumentParser {
 
     /**
+     * This list is based on all the html tags supported by Markup
+     */
+    public static $allowed_tags = '<h1><h2><h3><h4><h5><h6><p><i><strong><em><code><blockquote><a><img><ul><ol><li>';
+
+    /**
      * Parse a document from the contents of the string
      * @param mixed $string The contents of the file to process
      * @param string $mimetype [optional] The mimetype of the file. Defaults to text/plain
@@ -47,7 +52,11 @@ class DocumentParser {
         }
         
         if (preg_match("/^text\/*/", $mimetype)) {
-            return file_get_contents($filename);
+            if ($mimetype === 'text/html') {
+                return strip_tags(file_get_contents($filename), self::$allowed_tags);
+            } else {
+                return file_get_contents($filename);
+            }
         } else if ($mimetype === 'application/rtf') {
             return self::parseRtf($filename);
         } else if ($mimetype === 'application/msword') {
@@ -99,7 +108,7 @@ class DocumentParser {
            throw new \Exception("Failed to read file. Failed zip extraction.");
         }
         
-        return strip_tags($content, '<p><em><strong>');
+        return strip_tags($content, self::$allowed_tags);
     }
 
     /**

@@ -148,7 +148,8 @@ class DocumentParser {
             }
         }
 
-        self::removeEmptyTag($xmldoc, 'p');
+        // If there is an intetionally blank paragraph to add space, should we delete it? 
+        // self::removeEmptyTag($xmldoc, 'p');
     }
     
     /**
@@ -156,33 +157,60 @@ class DocumentParser {
      * @param \DOMDocument $xmldoc The XML document to manipulate
      */
     private static function convertOdtToHtml(\DOMDocument $xmldoc) {
-        self::removeDomNamespace($xmldoc, 'office');
-        self::removeDomNamespace($xmldoc, 'style');
-        self::removeDomNamespace($xmldoc, 'text');
         $xpath = new \DOMXPath($xmldoc);
-        // Cannot select using XPath attributes for some reason, cannot seem to access 'style-name' attr
-        $spans = $xpath->query("//body/text/p/span");
-        
-        foreach ($spans as $span) {
-            /*@var $span DOMElement*/
-            if (!$span->attributes->length) {
-                continue;
-            }
+        // Unfortanately OASIS standard for ODT does not specify a consistent naming for style properties
+        // Bolds and Italic can't be parsed since their stylings are dynamically set by the office suite
+        $spans = $xpath->query("//text:p");
+        $ols = $xpath->query("//text:list");
+        $links = $xpath->query("//text:a");
+        $tables = $xpath->query("//table:table");
+        $headings = $xpath->query("//text:h");
+        // It's possible to parse images and serve them encoding their data in base64
+        // Should this be done?
+        // $images = $xpath->query("draw:image");
 
-            $attributes = iterator_to_array($span->attributes);
-            
-            if (isset($attributes['style-name'])) {
-                /*@var $attr DOMAttr*/
-                $attr = $attributes['style-name'];
-                if ($attr->value === 'T3') {
-                    self::renameTag($span, 'em');
-                } else if ($attr->value === 'T4') {
-                    self::renameTag($span, 'strong');
-                }
+        foreach ($spans as $span) {
+            self::renameTag($span, 'p');
+        }
+
+        foreach ($ols as $ol) {
+            self::renameTag($ol, 'ol');
+            /**
+             * It might be possible to distinguish ordered lists from unordered lists via the attribute: text:list-level-style-number
+             */
+            foreach ($xpath->query('//text:list-item') as $li) {
+                self::renameTag($li, 'li');
             }
         }
 
-        self::removeEmptyTag($xmldoc, 'p');
+        foreach ($links as $link) {
+            $href = $link->getAttribute('xlink:href');
+            self::renameTag($link, 'a href="' . $href . "'");
+        }
+
+        foreach ($tables as $table) {
+            self::renameTag($table, 'table');
+            
+            foreach ($xpath->query('//table:table-row') as $row) {
+                self::renameTag($row, 'tr');
+            }
+            foreach ($xpath->query('//table:table-cell') as $coll) {
+                self::renameTag($coll, 'td');
+            }
+        }
+
+        foreach ($headings as $heading) {
+            // Find heading level
+            $level = $heading->getAttribute('text:outline-level');
+            if ($level > 6) {
+                $level = 6;
+            }
+
+            self::renameTag($heading, 'h' . $level);
+        }
+
+        // If there is an intetionally blank paragraph to add space, should we delete it? 
+        // self::removeEmptyTag($xmldoc, 'p');
     }
     
     /**

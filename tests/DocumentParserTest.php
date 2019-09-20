@@ -30,6 +30,13 @@ class testDocumentParser extends \PHPUnit\Framework\TestCase {
     <p>Test html for lukemadhanga/php-document-parser.</p>', $html);
     }
 
+    public function testParseFromFileReadsODT() {
+        $odt = \LukeMadhanga\DocumentParser::parseFromFile('tests/testFile.odt');
+
+        $this->assertIsString($odt);
+        $this->assertEquals("\n<h1>Header 1</h1><h2>Header 2</h2><p>Styled text</p><ol><li><p>ol1</p></li><li><p>ol2 </p></li></ol><ol><li><p>ul1</p></li><li><p>ul2</p></li></ol>\n", $odt);
+    }
+
     /**
      * Check that content extracted from RTF is valid
      */

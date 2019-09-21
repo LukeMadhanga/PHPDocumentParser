@@ -5,6 +5,14 @@
 ----------
 
 
+Authors
+- @facuonline
+- Luke Madhanga @LukeMadhanga
+
+
+----------
+
+
 This library is perfect if you want users to be able to upload word documents to your content management system, instead of forcing them to copy and paste. Supported file types are **.doc**, **.docx**, **.txt** and **.rtf**.
 
 > composer require lukemadhanga/php-document-parser
@@ -48,13 +56,17 @@ string `$mimetype` The mimetype of the file. This will be used to determine whic
 
 ## Change log
 
+#### September 21 2019 (0.1.4)
+**Better ODT Support**
+Merged in PR#13 for better ODT support. Author: facuonline
+
 #### August 1 2019 (0.1.3)
 **PHP Unit**
-Merged in #12 for PHP Unit testing. Author: facuonline
+Merged in PR#12 for PHP Unit testing. Author: facuonline
 
 #### March 21 2019 (0.1.2)
 **DOCX Handling**
-Merged in #10 For better DOCX handling. Includes bug fixes for exception handling. Author: facuonline
+Merged in PR#10 For better DOCX handling. Includes bug fixes for exception handling. Author: facuonline
 
 
 #### September 13th 2017

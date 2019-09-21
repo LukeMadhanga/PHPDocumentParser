@@ -2,7 +2,17 @@
 
 namespace LukeMadhanga;
 
+/**
+ * A PHP parser for getting the text from a .doc, .docx, .rtf or .txt file
+ * @author Luke Madhanga https://github.com/LukeMadhanga
+ * @author Facundo Subiabre https://github.com/facuonline
+ */
 class DocumentParser {
+
+    /**
+     * This list is based on all the html tags supported by Markup
+     */
+    public static $allowed_tags = '<h1><h2><h3><h4><h5><h6><p><i><strong><em><code><blockquote><a><img><ul><ol><li>';
 
     /**
      * Parse a document from the contents of the string
@@ -15,15 +25,18 @@ class DocumentParser {
         if (preg_match("/^text\/*/", $mimetype)) {
             return $string;
         }
+
         $tmpfilename = 'temp/' . time() . sha1($string) . '.tmp';
         file_put_contents($tmpfilename, $string);
+        
         $contents = self::parseFromFile($tmpfilename, $mimetype);
+        
         unlink($tmpfilename);
         return $contents;
     }
     
     /**
-     * Parse the a document and get the text
+     * Parse a document and get the text
      * @param string $filename The name of the file to read
      * @param string $mimetype The mimetype of the file. Used to decide which algorithm to use
      * @return string|html The extracted document. For DOC(X) and ODT documents, the content is returned in a HTML format
@@ -33,11 +46,17 @@ class DocumentParser {
         if (!is_readable($filename)) {
             throw new \Exception("Failed to read file: cannot read file: $filename");
         }
+
         if (!$mimetype) {
             $mimetype = mime_content_type($filename);
         }
+        
         if (preg_match("/^text\/*/", $mimetype)) {
-            return file_get_contents($filename);
+            if ($mimetype === 'text/html') {
+                return self::parseHtml($filename);
+            } else {
+                return file_get_contents($filename);
+            }
         } else if ($mimetype === 'application/rtf') {
             return self::parseRtf($filename);
         } else if ($mimetype === 'application/msword') {
@@ -56,8 +75,8 @@ class DocumentParser {
     /**
      * Parse zipped document, i.e. .docx or .odt (adapted from http://goo.gl/usI7PF)
      * @param string $filename The path to the document
-     * @param string $datafile .odt and .docx documents are just zipped folders with an XML file. This variable is the path to the main
-     *  xml file which holds the text for the document
+     * @param string $datafile .odt and .docx documents are just zipped folders with an XML file.
+     * This variable is the path to the main xml file which holds the text for the document
      * @return html
      * @throws Exception
      */
@@ -65,6 +84,7 @@ class DocumentParser {
         // Zip function requires a read from a file
         $zip = new \ZipArchive();
         $content = '';
+        
         if ($zip->open($filename)) {
             // If done, search for the data file in the archive
             if (($index = $zip->locateName($datafile)) !== false) {
@@ -72,19 +92,23 @@ class DocumentParser {
                 $data = $zip->getFromIndex($index);
                 $xmldoc = new \DOMDocument();
                 $xmldoc->loadXML($data, LIBXML_NOENT | LIBXML_XINCLUDE | LIBXML_NOERROR | LIBXML_NOWARNING);
+                
                 if ($datafile === 'word/document.xml') {
                     // Perform docx specific processing
                     self::convertWordToHtml($xmldoc);
                 } else {
                     self::convertOdtToHtml($xmldoc);
                 }
+
                 $content = $xmldoc->saveXML();
             }
+
             $zip->close();
         } else {
-           throw new \Exception("Failed to read file", 1);
+           throw new \Exception("Failed to read file. Failed zip extraction.");
         }
-        return strip_tags($content, '<p><em><strong>');
+        
+        return strip_tags($content, self::$allowed_tags);
     }
 
     /**
@@ -95,6 +119,7 @@ class DocumentParser {
         // To make processing easier, remove the 'w' namespace from all elements
         self::removeDomNamespace($xmldoc, 'w');
         $xpath = new \DOMXPath($xmldoc);
+
         // Get all 'r' elements
         foreach ($xpath->query("//r") as $node) {
             /*@var $node DOMElement*/
@@ -103,22 +128,28 @@ class DocumentParser {
             // The rPr tag defines style elements 
             $stylenodes = $node->getElementsByTagName('rPr');
             $textnode = $node->getElementsByTagName('t')->item(0);
+            
             if ($stylenodes && $textnode && $stylenodes->length) {
                 $stylenode = $stylenodes->item(0);
                 $itags = $stylenode->getElementsByTagName('i');
                 $btags = $stylenode->getElementsByTagName('b');
+                
                 if ($itags->length) {
                     self::renameTag($textnode, 'em');
                 } else if ($btags->length) {
                     self::renameTag($textnode, 'strong');
                 }
+                
                 $toremove = array_merge(iterator_to_array($itags), iterator_to_array($btags));
+                
                 foreach ($toremove as $nodetoremove) {
                     $nodetoremove->parentNode->removeChild($nodetoremove);
                 }
             }
         }
-        self::removeEmptyTag($xmldoc, 'p');
+
+        // If there is an intetionally blank paragraph to add space, should we delete it? 
+        // self::removeEmptyTag($xmldoc, 'p');
     }
     
     /**
@@ -126,29 +157,60 @@ class DocumentParser {
      * @param \DOMDocument $xmldoc The XML document to manipulate
      */
     private static function convertOdtToHtml(\DOMDocument $xmldoc) {
-        self::removeDomNamespace($xmldoc, 'office');
-        self::removeDomNamespace($xmldoc, 'style');
-        self::removeDomNamespace($xmldoc, 'text');
         $xpath = new \DOMXPath($xmldoc);
-        // Cannot select using XPath attributes for some reason, cannot seem to access 'style-name' attr
-        $spans = $xpath->query("//body/text/p/span");
+        // Unfortanately OASIS standard for ODT does not specify a consistent naming for style properties
+        // Bolds and Italic can't be parsed since their stylings are dynamically set by the office suite
+        $spans = $xpath->query("//text:p");
+        $ols = $xpath->query("//text:list");
+        $links = $xpath->query("//text:a");
+        $tables = $xpath->query("//table:table");
+        $headings = $xpath->query("//text:h");
+        // It's possible to parse images and serve them encoding their data in base64
+        // Should this be done?
+        // $images = $xpath->query("draw:image");
+
         foreach ($spans as $span) {
-            /*@var $span DOMElement*/
-            if (!$span->attributes->length) {
-                continue;
-            }
-            $attributes = iterator_to_array($span->attributes);
-            if (isset($attributes['style-name'])) {
-                /*@var $attr DOMAttr*/
-                $attr = $attributes['style-name'];
-                if ($attr->value === 'T3') {
-                    self::renameTag($span, 'em');
-                } else if ($attr->value === 'T4') {
-                    self::renameTag($span, 'strong');
-                }
+            self::renameTag($span, 'p');
+        }
+
+        foreach ($ols as $ol) {
+            self::renameTag($ol, 'ol');
+            /**
+             * It might be possible to distinguish ordered lists from unordered lists via the attribute: text:list-level-style-number
+             */
+            foreach ($xpath->query('//text:list-item') as $li) {
+                self::renameTag($li, 'li');
             }
         }
-        self::removeEmptyTag($xmldoc, 'p');
+
+        foreach ($links as $link) {
+            $href = $link->getAttribute('xlink:href');
+            self::renameTag($link, 'a href="' . $href . "'");
+        }
+
+        foreach ($tables as $table) {
+            self::renameTag($table, 'table');
+            
+            foreach ($xpath->query('//table:table-row') as $row) {
+                self::renameTag($row, 'tr');
+            }
+            foreach ($xpath->query('//table:table-cell') as $coll) {
+                self::renameTag($coll, 'td');
+            }
+        }
+
+        foreach ($headings as $heading) {
+            // Find heading level
+            $level = $heading->getAttribute('text:outline-level');
+            if ($level > 6) {
+                $level = 6;
+            }
+
+            self::renameTag($heading, 'h' . $level);
+        }
+
+        // If there is an intetionally blank paragraph to add space, should we delete it? 
+        // self::removeEmptyTag($xmldoc, 'p');
     }
     
     /**
@@ -158,6 +220,7 @@ class DocumentParser {
      */
     private static function removeEmptyTag(\DOMDocument $xmldoc, $tagname) {
         $xpath = new \DOMXPath($xmldoc);
+        
         foreach ($xpath->query("//$tagname") as $node) {
             /*@var $node DOMElement*/
             if (trim($node->textContent) === '') {
@@ -175,6 +238,7 @@ class DocumentParser {
     private static function removeDomNamespace(\DOMDocument $xmldoc, $namespace) {
         $xpath = new \DOMXPath($xmldoc);
         $nodes = $xpath->query("//*[namespace::{$namespace} and not(../namespace::{$namespace})]");
+        
         foreach ($nodes as $n) {
             $namespaceuri = $n->lookupNamespaceURI($namespace);
             $n->removeAttributeNS($namespaceuri, $namespace);
@@ -191,9 +255,11 @@ class DocumentParser {
         $document = $tag->ownerDocument;
         $newtag = $document->createElement($newtagname);
         $tag->parentNode->replaceChild($newtag, $tag);
+        
         foreach (iterator_to_array($tag->childNodes) as $child) {
             $newtag->appendChild($tag->removeChild($child));
         }
+        
         return $newtag;
     }
     
@@ -207,17 +273,32 @@ class DocumentParser {
             $tagnames = explode(',', $tagnames);
         }
         $xpath = new \DOMXPath($xml);
+        
         foreach ($tagnames as $tagname) {
             $nodes = $xpath->query("//{$tagname}");
+         
             foreach ($nodes as $node) {
                 /*@var $node DOMNode*/
                 /*@var $parentnode DOMNode*/
                 $parentnode = $node->parentNode;
+         
                 if ($parentnode) {
                     $parentnode->removeChild($node);
                 }
             }
         }
+    }
+
+    /**
+     * Parse an .html file
+     * @param string $filename The path to the html file
+     * @return html Without non markup supported tags
+     */
+    public static function parseHtml($filename) {
+        $content = file_get_contents($filename);
+
+        $content = strip_tags($content, self::$allowed_tags);
+        return trim($content);
     }
 
     /**
@@ -261,20 +342,26 @@ class DocumentParser {
         $xpath = new \DOMXPath($xml);
         // Find all of the 'para' nodes
         $paranodes = $xpath->query('//para');
+        
         foreach ($paranodes as $node) {
             /*@var $node \DOMElement*/
             self::renameTag($node, 'p');
         }
+        
         // Find all of the 'emphasis' nodes
         $emnodes = $xpath->query('//emphasis');
+        
         foreach ($emnodes as $node) {
             /*@var $node \DOMElement*/
             $newtagname = 'em';
+        
             if ($node->getAttribute('role') === 'bold') {
                 $newtagname = 'strong';
+        
             }
             self::renameTag($node, $newtagname);
         }
+        
         self::removeEmptyTag($xml, 'p');
         // White space management. Required if output is being in JS Code editors like tinyMCE
         return str_replace("\n", '', trim(strip_tags($xml->saveXML(), '<p><em><b>')));
@@ -287,11 +374,13 @@ class DocumentParser {
      */
     private static function rtfIsPlainText($string) {
         $arrfailat = ["*", "fonttbl", "colortbl", "datastore", "themedata"];
+        
         for ($i = 0; $i < count($arrfailat); $i++) {
             if (!empty($string[$arrfailat[$i]])) {
                 return false;
             }
         }
+        
         return true;
     }
 
@@ -304,17 +393,26 @@ class DocumentParser {
     private static function parseRtf($filename) {
         // Read the data from the input file.
         $text = file_get_contents($filename);
+        
         if (!strlen($text)) {
             return "";
         }
+        
         // Create empty stack array.
         $document = "";
         $stack = [];
         $j = -1;
-        // Read the data character-by- character…
-        for ($i = 0, $len = strlen($text); $i < $len; $i++) {
+        
+        // Read the data character by character...
+        for ($i = 0; $i < strlen($text); $i++) {
             $c = $text[$i];
-            $isplaintext = isset($stack[$j]) ? self::rtfIsPlainText($stack[$j]) : false;
+            
+            if (isset($stack[$j])) {
+                $isplaintext = self::rtfIsPlainText($stack[$j]);
+            } else {
+                $isplaintext = false;
+            }
+            
             // Depending on current character select the further actions.
             switch ($c) {
                 // the most important key word backslash
@@ -338,6 +436,7 @@ class DocumentParser {
                     // of a character we should add to the output stream.
                     elseif ($nc == "'") {
                         $hex = substr($text, $i + 2, 2);
+                        
                         if ($isplaintext) {
                             $document .= html_entity_decode("&#" . hexdec($hex) . ";");
                         }
@@ -352,6 +451,7 @@ class DocumentParser {
                         // Start reading characters after the backslash.
                         for ($k = $i + 1, $m = 0; $k < strlen($text); $k++, $m++) {
                             $nc = $text[$k];
+                            
                             // If the current character is a letter and there were no digits before it,
                             // then we’re still reading the control word. If there were digits, we should stop
                             // since we reach the end of the control word.
@@ -382,6 +482,7 @@ class DocumentParser {
 
                         // Start analyzing what we’ve read. We are interested mostly in control words.
                         $totext = "";
+
                         switch (strtolower($word)) {
                             // If the control word is "u", then its parameter is the decimal notation of the
                             // Unicode character that should be added to the output stream.
@@ -390,6 +491,7 @@ class DocumentParser {
                             case "u":
                                 $totext .= html_entity_decode("&#x" . dechex($param) . ";");
                                 $ucdelata = @$stack[$j]["uc"];
+                                
                                 if ($ucdelata > 0) {
                                     $i += $ucdelata;
                                 }
@@ -467,8 +569,9 @@ class DocumentParser {
                     break;
             }
         }
+        
         // Return result.
-        return $document;
+        return trim($document);
     }
 
 }

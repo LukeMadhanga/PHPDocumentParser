@@ -26,7 +26,7 @@ class DocumentParser {
             return $string;
         }
 
-        $tmpfilename = 'temp/' . time() . sha1($string) . '.tmp';
+        $tmpfilename = tempnam(sys_get_temp_dir(), 'parser');
         file_put_contents($tmpfilename, $string);
         
         $contents = self::parseFromFile($tmpfilename, $mimetype);

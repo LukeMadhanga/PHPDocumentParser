@@ -364,7 +364,7 @@ class DocumentParser {
         
         self::removeEmptyTag($xml, 'p');
         // White space management. Required if output is being in JS Code editors like tinyMCE
-        return str_replace("\n", '', trim(strip_tags($xml->saveXML(), '<p><em><b>')));
+        return str_replace("\n", '', trim(strip_tags($xml->saveXML(), '<p><em><b><strong>')));
     }
 
     /**
